@@ -1,0 +1,223 @@
+---
+title: "Project_1_Analyst"
+author: "go001"
+date: "2/10/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+    library(dplyr)
+    library(tidyr)
+    library(tidyverse)
+```
+
+```{r Downloading Sample Data}
+    matrix_file_path = "~/Desktop/batch_corrected_data.csv"
+    matrix_data = read_delim(matrix_file_path, delim = ",")
+    str(matrix_data)
+```
+
+#### Matrix Description
+first column contains the probset ID and the other columns contain the sample information
+
+```{r controlling the name}
+    colnames(matrix_data) = sub("_.*", "", colnames(matrix_data))
+    colnames(matrix_data)[1] = "Gene"
+```
+Since the probeset-id is currently labeled as pb-id, the column was renamed to be easily identifiable.
+
+
+# Problem 4
+Implement the following filters on the RMA normalized, ComBat adjusted expression matrix:
+
+1. Expressed in at least 20% of samples (i.e. for each gene, at least 20% of the gene-expression values must be > 𝑙𝑜𝑔2(15)).
+```{r filter for gene expression value}
+
+# filters out the genes that do not have a high enough expression
+min_level_expression = log(15,base = 2)
+min_sample_expression = .2 
+matrix_dataF1 =matrix_data %>% 
+        filter( (rowSums(.[-1] > min_level_expression)/(ncol(.)-1)) >min_sample_expression )
+```
+
+```{r}
+# Total amount of genes that had atleast 20% of the samples pass the gene expression values of atleast log(15,base = 2)
+print(paste0("There was ", nrow(MaskF1)," genes that past the first filter."))
+```
+
+
+2. Have a variance significantly different from the median variance of all probe sets using a threshold of 𝑝<0.01 (hint: use a chi-squared test as shown in http://www.itl.nist.gov/div898/handbook/eda/section3/eda358.htm. 
+
+You will need to manually compute the test statistic for each gene and compare it to the chi-squared distribution with the correct number of degrees of freedom using the qchisq() function).
+
+
+```{r filter 2 significantly different variance}
+#Function for obtaining the median variance
+variance = function(x){
+    a = sum((x - mean(x))^2)/(length(x) - 1)
+    return(a)
+}
+# Variance for each row
+# variance of every single gene
+varList = apply(matrix_dataF1[,-1], MARGIN = 1, FUN = variance)
+# Finding the median for the varList
+sigma02 = median(varList)
+
+# calculate the minimum test statistic 
+testStat = qchisq(p = 0.01, df = ncol(matrix_data)-2,lower.tail = F)
+df = ncol(matrix_data) - 2
+testchi = df*varList/(sigma02)
+
+# Create Mask for the second filter
+MaskF2 = testchi>testStat
+
+ptable = 1 - pchisq(testchi,ncol(matrix_data)-2)
+matrix_dataF2 = matrix_dataF1[MaskF2,]
+```
+
+```{r}
+# Total amount of genes that had atleast 20% of the samples pass the gene expression values of atleast log(15,base = 2)
+print(paste0("There was ", nrow(matrix_dataF2)," genes that past the first filter."))
+```
+
+Have a coefficient of variation > 0.186.
+
+```{r filter 3 coefficient of variation}
+    varListF3 = varList[MaskF2]
+    mu = apply(matrix_dataF2[,-1], MARGIN = 1, FUN = mean)
+    MaskF3 = (sqrt(varListF3)/mu) > 0.186
+    matrix_dataF3 = matrix_dataF2[MaskF3,]
+```
+
+
+3. Write out a different file containing the gene expression matrix for genes passing all three of the filters from 4.1, 4.2, and 4.3.
+
+```{r}
+write.csv(matrix_dataF3,file = "./matrix_data_3_filter.csv",row.names = F)
+```
+
+
+4. For groups with Biologist role only: Write out the expression matrix for probesets that pass the expression threshold from 4.2 to a file with write.csv.
+
+```{r}
+write.csv(write_Bio, file = "./write.csv", row.names = F)
+```
+
+Part 5.
+
+```{r Setting up data for clustering }
+# clustering will be done on the matrix that passed all 3 filters
+clustering_data = matrix_dataF3
+
+# Currently the rows are the probesets so the clustering will be done on the probesets instead of samples
+# the matrix is Transposed
+TcolName = matrix_dataF3$Gene
+TrowName = names(matrix_dataF3)[-1]
+df.clustering_data = as.data.frame(t(clustering_data[,-1]))
+
+# Its important to keep track of the probeset ids and sample ids so it is placed back in 
+names(df.clustering_data) = TcolName
+row.names(df.clustering_data) = TrowName
+#df.clustering_data
+```
+
+```{r Clustering}
+# this is the clustering using euclidean distance
+dist_mat <- dist(df.clustering_data, method = 'euclidean')
+hclust_avg <- hclust(dist_mat, method = 'average')
+plot(hclust_avg,cex=0.8)
+```
+
+```{r Split into two clusters}
+
+cut_avg <- cutree(hclust_avg, k = 2)
+
+plot(hclust_avg, cex=0.8)
+
+suppressPackageStartupMessages(library(dendextend))
+avg_dend_obj <- as.dendrogram(hclust_avg)
+avg_col_dend <- color_branches(avg_dend_obj, h = 90)
+plot(avg_col_dend)
+rect.hclust(hclust_avg , k = 2, border = 2:6, cex=0.7)
+```
+
+```{r Counting the amount of samples per cluster}
+    k = 2
+    for(i in 1:k){
+        print(paste0("There is ", sum(cut_avg==i), " samples in cluster ",i))
+    }
+```
+
+```{r Creating Heat Map}
+#str(df.clustering_data)
+#col contains samples
+#row contains genes
+#df.clustering_data
+
+# Reads the metadata and record which Geo accesion id(Sample ID) is associated with which colon subtype
+meta_data = read_delim("~/Desktop/proj_metadata.csv", delim = ",")
+geo_accession = rownames(df.clustering_data)
+rowName = as.data.frame(geo_accession)
+classification = dplyr::left_join(x = rowName, y = meta_data[c("cit-coloncancermolecularsubtype","geo_accession")], by= "geo_accession")
+
+# Creates a mask to determine which colon subtype is associated with which geo_accesion
+C3_subtype = classification$`cit-coloncancermolecularsubtype`=="C3"
+C3_subtype= C3_subtype[1:nrow(df.clustering_data)]
+data_heatmap <- as.matrix(t(df.clustering_data))
+
+# Create with Heatmap
+png(file="~/Desktop/heatmap.png",width = 1000,height = 800)
+heatmap(x = data_heatmap,ColSideColors = if_else(C3_subtype,"Red","blue"),cexCol = 0.8, scale = "row")
+legend(x="right", legend=c("1:Low", "2","3","4", "5:High"),fill=heat.colors(5),cex = 0.8,title = "Heat map")
+legend(x="topright", legend=c("C3", "Other"),fill=c("Red","Blue"),cex = 0.8,title = "Colon Cancer Subtype")
+
+```
+
+```{r}
+#attempting Welch test
+write_Bio = data_frame(Gene = c(),t_statistic = c(),p_value = c(), p_adj = c())
+for( i in 1:ncol(df.clustering_data)){
+    t_test = t.test(df.clustering_data[C3_subtype,i], df.clustering_data[-C3_subtype,i], alternative = "two.sided")
+    p_adj = p.adjust(t_test$p.value, method = "bonferroni", n = ncol(df.clustering_data))
+    temp = data_frame(Gene = names(df.clustering_data)[i], t_statistic = t_test$statistic,p_value = t_test$p.value, p_adj = p_adj)
+    write_Bio = rbind(write_Bio,temp)
+}
+
+End_of_Analyst = data_frame(write_Bio$Gene,write_Bio$t_statistic,write_Bio$p_value,write_Bio$p_adj)
+names(End_of_Analyst) = c("Gene", "t_score", "p_value", "p_adj")
+write.csv(End_of_Analyst, file = "./write.csv", row.names = F)
+```
+```{r}
+# displaying the result of the expression types
+Highly_expressed = End_of_Analyst %>%
+    filter(p_adj<0.05) %>%
+    arrange(p_adj)
+
+print(paste0("There was ", sum(Highly_expressed$t_score>0)," genes up-regulated."))
+print(paste0("There was ", sum(Highly_expressed$t_score<0)," genes down-regulated."))
+
+Highly_expressed[Highly_expressed$t_score>0,]
+```
+
+
+```{r for Biologist}
+clustering_data = matrix_dataF2
+TcolName = matrix_dataF2$Gene
+TrowName = names(matrix_dataF2)[-1]
+
+df.clustering_data = as.data.frame(t(clustering_data[,-1]))
+names(df.clustering_data) = TcolName
+row.names(df.clustering_data) = TrowName
+
+write_Bio = data_frame(Gene = c(),t_statistic = c(),p_value = c(), p_adj = c())
+for( i in 1:ncol(df.clustering_data)){
+    t_test = t.test(df.clustering_data[C3_subtype,i], df.clustering_data[-C3_subtype,i], alternative = "two.sided")
+    p_adj = p.adjust(t_test$p.value, method = "bonferroni", n = ncol(df.clustering_data))
+    temp = data_frame(Gene = names(df.clustering_data)[i], t_statistic = t_test$statistic,p_value = t_test$p.value, p_adj = p_adj)
+    write_Bio = rbind(write_Bio,temp)
+}
+
+For_Bio = data_frame(write_Bio$Gene,write_Bio$t_score,write_Bio$p_value,write_Bio$p_adj)
+write.csv(write_Bio, file = "./write.csv", row.names = F)
+```
