@@ -1,6 +1,6 @@
 # Project Description
 
-BF528 Project 1: Microarray Based Tumor Classification
+Class project from course BF528 in Boston University's M.S. Bioinformatics program: Microarray Based Tumor Classification, recreating results from Marisa et al. Gene Expression Classification of Colon Cancer into Molecular Subtypes: Characterization, Validation, and Prognostic Value. PLoS Medicine, May 2013. PMID: 23700391
 
 # Contributors
 
@@ -9,7 +9,3 @@ Meghana Peshwa Programmer GitHub: meghana-peshwa
 Go Ogata Analyst GitHub: go001
 Haroon Qureshi Biologist GitHub: hmqure
 
-
-# Repository Contents
-
-Provide a brief description of each script/code file in this repo, what it does, and how to execute it
