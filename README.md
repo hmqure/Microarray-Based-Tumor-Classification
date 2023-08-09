@@ -4,8 +4,5 @@ Class project from course BF528 in Boston University's M.S. Bioinformatics progr
 
 # Contributors
 
-Liz Murphy Data Curator GitHub: ecmurphy14
-Meghana Peshwa Programmer GitHub: meghana-peshwa
-Go Ogata Analyst GitHub: go001
-Haroon Qureshi Biologist GitHub: hmqure
+Data Curator: Liz Murphy (GitHub: ecmurphy14) | Programmer: Meghana Peshwa (GitHub: meghana-peshwa) | Analyst: Go Ogata (GitHub: go001) | Biologist: Haroon Qureshi (GitHub: hmqure)
 
